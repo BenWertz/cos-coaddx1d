@@ -1,6 +1,6 @@
 _pycache_
-_pycache_/**
-ipynb_checkpoints
+_pycache_/*.pyc
+.ipynb_checkpoints
 .ipynb_checkpoints/**
 outputs
 outputs/**
