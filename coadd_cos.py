@@ -157,14 +157,14 @@ if not os.path.exists("outputs"):
     os.mkdir("outputs")
     os.mkdir("outputs/figures")
 
-# for line,wlen in zip(full_line_lib["line_name"],full_line_lib["lambda"]):
-#     diagnostic_plots.diagnostic_plot(
-#         "outputs/figures",
-#         spec_table,line,wlen,output_table,
-#         filenames,
-#         line_lib,
-#         TGT_LINE_NAME_LIST
-#     )
+for line,wlen in zip(full_line_lib["line_name"],full_line_lib["lambda"]):
+    diagnostic_plots.diagnostic_plot(
+        "outputs/figures",
+        spec_table,line,wlen,output_table,
+        filenames,
+        line_lib,
+        TGT_LINE_NAME_LIST
+    )
 
 coadd_data=coaddition.coadd_spec(
     spec_table,

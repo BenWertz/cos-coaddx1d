@@ -2,6 +2,7 @@ import numpy as np
 from astropy.io import fits
 import datetime
 import spectrum_align
+import astropy.units as u
 from scipy.interpolate import *
 
 def save_spec_data(filename, spec_data): 
@@ -60,83 +61,80 @@ def coadd_spec(spec_table,filenames,offset_table,
 
     # ref grid
     ref_spec_data=spec_table[filenames[ref_idx]]
-    ref_wave=ref_spec_data["wave"]
-    wlim=((ref_wave.value>min([spec_table[f]["header"]["MINWAVE"] for f in filenames]))&
-          (ref_wave.value<max([spec_table[f]["header"]["MAXWAVE"] for f in filenames])))
+    wl_delta=np.median(np.diff(ref_spec_data["wave"].value))
+    wl_min=min([spec_table[f]["header"]["MINWAVE"] for f in filenames])
+    wl_max=max([spec_table[f]["header"]["MAXWAVE"] for f in filenames])
+    common_grid_wave=np.arange(
+        wl_min,
+        wl_max,
+        wl_delta
+    )*u.AA
 
-    ref_wave=ref_wave[wlim]
-    ref_wave=np.sort(ref_wave[~np.isnan(ref_wave)])
-    ref_flx=ref_spec_data["flux"][wlim]
-    ref_err=ref_spec_data["error"][wlim]
-    ref_cnt=ref_spec_data["net"][wlim]
+    # ref_wave=ref_wave[wlim]
+    # ref_wave=np.sort(ref_wave[~np.isnan(ref_wave)])
+    # ref_flx=ref_spec_data["flux"][wlim]
+    # ref_err=ref_spec_data["error"][wlim]
+    # ref_cnt=ref_spec_data["net"][wlim]
 
-    coadded_flux=np.zeros(len(ref_wave))
-    weights=np.zeros(len(ref_wave))
-    error_accum=np.zeros(len(ref_wave))
+    coadded_flux=np.zeros(len(common_grid_wave))
+    weights=np.zeros(len(common_grid_wave))
+    error_accum=np.zeros(len(common_grid_wave))
 
     for i,x1d_name in enumerate(filenames):
         spec_data=spec_table[x1d_name]
-        if i==ref_idx:
-            # spec_data["wave_updated"]=spec_data["wave"]
-            mask=((ref_flx!=0)&~np.isnan(ref_err))
+        # else:
+        wave=spec_data["wave"]
+        counts=spec_data["net"]
+        flux=spec_data["flux"]
+        error=spec_data["error"]
 
-            if weighing=="exptime":
-                weight=np.ones(len(ref_err))*spec_data["exptime"]
-            elif weighing=="modified_exptime":
-                weight=(ref_cnt/ref_flx)*spec_data["exptime"]
-                weight[ref_flx==0]=0.
+        offset_wave=wave-offset_table["mean_dlambda"][i]
 
-            coadded_flux[mask]+=ref_flx[mask]*weight[mask]
-            error_accum[mask]+=((ref_err[mask])**2)*weight[mask]
-            weights[mask]+=(mask.astype(np.float32)*weight)[mask]
-        else:
-            interp=interp1d(
-                spec_data["wave"]-offset_table["mean_dlambda"][i],
-                spec_data["flux"],
-                kind="nearest",
-                fill_value=0,
-                bounds_error=False
-            )
-            net_interp=interp1d(
-                spec_data["wave"]-offset_table["mean_dlambda"][i],
-                spec_data["net"],
-                kind="nearest",
-                fill_value=0,
-                bounds_error=False
-            )
-            err_interp=interp1d(
-                spec_data["wave"]-offset_table["mean_dlambda"][i],
-                spec_data["error"],
-                kind="nearest",
-                fill_value=0,
-                bounds_error=False
-            )
+        interp=interp1d(
+            offset_wave,
+            flux,
+            kind="nearest",
+            fill_value=0,
+            bounds_error=False
+        )
+        net_interp=interp1d(
+            offset_wave,
+            counts,
+            kind="nearest",
+            fill_value=0,
+            bounds_error=False
+        )
+        err_interp=interp1d(
+            offset_wave,
+            error,
+            kind="nearest",
+            fill_value=0,
+            bounds_error=False
+        )
 
-            # spec_data["wave_updated"]=ref_wave
-            interp_flux=interp(ref_wave)
-            interp_net=net_interp(ref_wave)
-            interp_err=err_interp(ref_wave)
+        # spec_data["wave_updated"]=ref_wave
+        interp_flux=interp(common_grid_wave)
+        interp_net=net_interp(common_grid_wave)
+        interp_err=err_interp(common_grid_wave)
 
-            if weighing=="exptime":
-                weight=np.ones(len(interp_flux))*spec_data["exptime"]
-            elif weighing=="modified_exptime":
-                weight=(interp_net/interp_flux)*spec_data["exptime"]
-                weight[interp_flux==0]=0.
+        if weighing=="exptime":
+            weight=np.ones(len(interp_flux))*spec_data["exptime"]
+        elif weighing=="modified_exptime":
+            weight=(interp_net/interp_flux)*spec_data["exptime"]
+            weight[interp_flux==0]=0.
 
-            mask=((interp_flux!=0) & ~np.isnan(interp_flux))
-            coadded_flux[mask]+=interp_flux[mask]*weight[mask]
-            error_accum[mask]+=(interp_err[mask]**2)*weight[mask]
+        mask=((interp_flux!=0) & ~np.isnan(interp_flux))
+        coadded_flux[mask]+=interp_flux[mask]*weight[mask]
+        error_accum[mask]+=(interp_err[mask]**2)*weight[mask]
 
-            weights[mask]+=(mask.astype(np.float32)*weight)[mask]
-
-            # plt.step(spec_data["wave"],spec_data["flux"],lw=0.5,label=filename)
+        weights[mask]+=(mask.astype(np.float32)*weight)[mask]
 
     coadded_flux/=weights
     coadded_error=(error_accum/weights)**.5
 
     # coadded_flux=coadded_error
     # Binning
-    output_wave,output_flux,output_error=bin_spec(ref_wave,coadded_flux,coadded_error,bin)
+    output_wave,output_flux,output_error=bin_spec(common_grid_wave,coadded_flux,coadded_error,bin)
 
     return {
         "wave":output_wave,
