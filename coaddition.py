@@ -141,7 +141,8 @@ def coadd_spec(spec_table,filenames,offset_table,
         "error":output_error,
         "flux":output_flux,
         "header":ref_spec_data["header"],
-        "weighing_method":weighing
+        "weighing_method":weighing,
+        "binning":bin
     }
 
 def bin_spec(x1, y1, error1, bins):

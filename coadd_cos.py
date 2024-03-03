@@ -201,6 +201,7 @@ coadd_data=coaddition.coadd_spec(
     3
 )
 ref_wave,coadded_flux,coadded_error=coadd_data["wave"],coadd_data["flux"],coadd_data["error"]
+ref_wave_unbinned,coadded_flux_unbinned,coadded_error_unbinned=coadd_data_unbinned["wave"],coadd_data_unbinned["flux"],coadd_data_unbinned["error"]
 
 # print(ref_wave[np.isnan(coadded_error)])
 # print("Min:")
@@ -218,25 +219,19 @@ plt.figure(figsize=(12,6))
 lim=diagnostic_plots.plot_clip_lim(coadded_flux,5)
 plt.ylim(lim[0],lim[1])
 
-# plt.step(coadd_data_unbinned["wave"],coadd_data_unbinned["flux"],color="b",lw=2,label=f"unbinned")
+plt.step(ref_wave,coadded_flux,color="k",lw=1,label=f"Coadded flux ({coadd_data['weighing_method']}, bins={coadd_data['binning']})")
 
-plt.step(ref_wave,coadded_flux,color="k",lw=2,label=f"Coadded spectrum ({coadd_data['weighing_method']})")
+plt.step(ref_wave_unbinned,coadded_flux_unbinned,color="red",lw=0.5,alpha=0.7,label=f"Coadded flux ({coadd_data_unbinned['weighing_method']}, unbinned)")
 
-plt.step(ref_wave,coadded_error,color="blue",lw=1,alpha=0.5,label="Error")
+plt.step(ref_wave,coadded_error,color="k",lw=1,alpha=0.5,label="Error (binned)")
 
-ref_coadd_data=fits.open("PG1011-040_G130M+G160M_coadd_x1d_bin3_m1.fits")[1]
-
-# coadd_data=spectrum_align.read_x1d_file("PG1011-040_G130M+G160M_coadd_x1d_bin3_m1.fits",wave_label="WAVE")
-plt.step(ref_coadd_data.data["WAVE"][0,:],ref_coadd_data.data["FLUX"][0,:],color="orange",lw=1.5,label="Actual coadded spectrum")
-
-plt.step(ref_coadd_data.data["WAVE"][0,:],ref_coadd_data.data["ERROR"][0,:],color="red",lw=1,alpha=0.5,label="(actual) Error")
-
+plt.step(ref_wave_unbinned,coadded_error_unbinned,color="red",lw=1,alpha=0.5,label="Error (unbinned)")
 
 plt.legend(loc="upper left",fontsize="x-small")
 plt.xlabel("$\lambda (\AA)$")
 plt.ylabel("Flux (ergs s^-1 m^-2 sr^-1)")
 plt.minorticks_on()
-plt.savefig("outputs/figures/coadded.png")
+plt.savefig("outputs/figures/coadd.png")
 plt.show()
 
 coaddition.save_spec_data(
