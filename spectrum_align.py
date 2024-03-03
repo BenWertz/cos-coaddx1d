@@ -93,6 +93,11 @@ def read_x1d_file(filename,wave_label="WAVELENGTH",flux_label="FLUX",error_label
     spec_data["header"]=data[0].header
     spec_data["grating"]=data[0].header["OPT_ELEM"]
 
+    spec_data["wavelim"]={
+        "min":data[0].header["MINWAVE"]*u.AA,
+        "max":data[0].header["MAXWAVE"]*u.AA
+    }
+
     print(list(spec_data["header"].keys()))
 
     return spec_data,spec_hdu
@@ -131,8 +136,9 @@ def process_line(spec_data,line_params,quiet_mode=False):
 
     flux_clipped,error_clipped=sigma_clip_data(line_data)
 
-    if prop_valid_data(line_data["line_vel"],flux_clipped)>0.16:
-        if not quiet_mode:print(f"\tLine {name}:\n\t\t<not enough valid datapoints>\n")
+    prop_valid=prop_valid_data(line_data["line_vel"],flux_clipped)
+    if prop_valid>0.16:
+        if not quiet_mode:print(f"\tLine {name}:\n\t\t<not enough valid datapoints> ({prop_valid})\n")
         return
     line_data["bad_line"]=False
 
@@ -225,7 +231,7 @@ def sigma_clip_data(line_data, clipping_sigma=2.5, smoothing_sigma=6):
     wave_clipped_0=wave[~sigma_clip_mask]
     flux_clipped_0=line_data["flux_norm"][~sigma_clip_mask]
     error_clipped_0=line_data["error_norm"][~sigma_clip_mask]
-    
+
     # Re-interpolate flux (and error) to patch holes in data
     flux_out=interp1d(
         wave_clipped_0,

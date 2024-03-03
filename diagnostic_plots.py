@@ -22,6 +22,8 @@ def diagnostic_plot(target_dir,spec_table,line,wlen,output_table,filenames,line_
 
             if not valid:
                 continue
+            if wlen<spec_data["wavelim"]["min"] or wlen>spec_data["wavelim"]["max"]:
+                continue
 
             spectrum_align.continuum_fit_line_data(
                 line_data,
@@ -29,12 +31,12 @@ def diagnostic_plot(target_dir,spec_table,line,wlen,output_table,filenames,line_
             )
             line_data["has_cont"]=True
 
+            # print(f,line,spec_data["wave"].min(),spec_data["wave"].max())
             flux_clipped,error_clipped=spectrum_align.sigma_clip_data(line_data)
             if spectrum_align.prop_valid_data(line_data["line_vel"],flux_clipped)>0.16:
                 continue
             line_data["bad_line"]=False
-
-    else:        
+    else:
         j=[l["name"] for l in spec_table[filenames[0]]["lines"]].index(line)
 
     for i,f in enumerate(filenames):

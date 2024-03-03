@@ -22,7 +22,7 @@ arg_COADD_MODE=(sys.argv[3] if len(sys.argv)>=3 else "exptime")
 
 wavelength_range={
     "g130m":[900,1450],
-    "g160m":[1360,1775],
+    "g160m":[1400,1775],
     "g130m_g160m":[900,1775],
 }
 
@@ -68,6 +68,10 @@ full_line_list=[
     "SII 1260",
     "SIII 1206",
 ]
+
+#TODO: Add actual validation lines for G160M grating
+full_line_list+=target_lines
+full_line_list=[line for i,line in enumerate(full_line_list) if (line not in full_line_list[:max(0,i-1)])]
 
 llist_ism['species'] = llist_ism['name'].str.split().str[0]
 
@@ -121,10 +125,27 @@ for i,filename in enumerate(filenames):
         )
         output_table[name][i]=spec_data["lines"][idx]["lambda_center"]
     print("\n========\n")
+
+best_idx=-1
+best_num_valid=0
+for i in range(len(filenames)):
+    num_valid=0
+    for col in output_table.colnames[1:]:
+        if not np.isnan(output_table[col][i]):
+            num_valid+=1
+    if num_valid>best_num_valid:
+        best_idx=i
+        best_num_valid=num_valid
+if best_idx==-1:
+    best_idx=0
+
+ref_idx=best_idx
+
 for col in output_table.colnames[1:]:
-    ref_wavelength=output_table[col][0]
+    ref_wavelength=output_table[col][ref_idx]
     for j in range(len(output_table[col])):
-        output_table[col][j]-=ref_wavelength
+        if not np.isnan(ref_wavelength):
+            output_table[col][j]-=ref_wavelength
 
 # mean_output_table=QTable(
 #     [filenames]+[np.nan*np.ones(len(filenames))*u.AA],
@@ -142,8 +163,6 @@ output_table.add_column(
 
 print("Δλ table")
 output_table.pprint(max_lines=-1,max_width=-1)
-
-# print_spec_table(spec_table)
 
 velocity_table=QTable(
     [filenames]+[np.nan*np.ones(len(filenames))*u.km/u.s for line in line_lib["lambda"]],
@@ -166,6 +185,14 @@ for line,wlen in zip(full_line_lib["line_name"],full_line_lib["lambda"]):
         TGT_LINE_NAME_LIST
     )
 
+coadd_data_unbinned=coaddition.coadd_spec(
+    spec_table,
+    filenames,
+    output_table,
+    arg_COADD_MODE,
+    1
+)
+
 coadd_data=coaddition.coadd_spec(
     spec_table,
     filenames,
@@ -175,21 +202,23 @@ coadd_data=coaddition.coadd_spec(
 )
 ref_wave,coadded_flux,coadded_error=coadd_data["wave"],coadd_data["flux"],coadd_data["error"]
 
-print(ref_wave[np.isnan(coadded_error)])
-print("Min:")
-print([spec_table[f]["header"]["MINWAVE"] for f in filenames])
-print("Max:")
-print([spec_table[f]["header"]["MAXWAVE"] for f in filenames])
+# print(ref_wave[np.isnan(coadded_error)])
+# print("Min:")
+# print([spec_table[f]["header"]["MINWAVE"] for f in filenames])
+# print("Max:")
+# print([spec_table[f]["header"]["MAXWAVE"] for f in filenames])
 
-print("Wave array min")
-print([spec_table[f]["wave"].min().value for f in filenames])
-print("Wave array max")
-print([spec_table[f]["wave"].max().value for f in filenames])
+# print("Wave array min")
+# print([spec_table[f]["wave"].min().value for f in filenames])
+# print("Wave array max")
+# print([spec_table[f]["wave"].max().value for f in filenames])
 
 
 plt.figure(figsize=(12,6))
 lim=diagnostic_plots.plot_clip_lim(coadded_flux,5)
 plt.ylim(lim[0],lim[1])
+
+# plt.step(coadd_data_unbinned["wave"],coadd_data_unbinned["flux"],color="b",lw=2,label=f"unbinned")
 
 plt.step(ref_wave,coadded_flux,color="k",lw=2,label=f"Coadded spectrum ({coadd_data['weighing_method']})")
 
@@ -210,35 +239,11 @@ plt.minorticks_on()
 plt.savefig("outputs/figures/coadded.png")
 plt.show()
 
-
 coaddition.save_spec_data(
     "outputs/coadd",
     coadd_data
 )
-
-# plt.show()
-
-
-# fig=plt.figure()
-# ax=fig.subplots(2,1)
-
-# for i,f in enumerate(filenames):
-#     lbl=f.split("\\")[-1].removesuffix(".fits")
-#     ax[0].plot(
-#         np.arange(len(target_lines)),
-#         np.array([output_table[col][i].value for col in output_table.colnames[1:-1]]),
-#         "x-",
-#         label=lbl
-#     )
-#     ax[1].plot(
-#         np.arange(len(target_lines)),
-#         ((np.array([output_table[col][i].value for col in output_table.colnames[1:-1]])*u.AA)*c.c/line_lib["lambda"]).to(u.km/u.s).value,
-#         "x-",
-#         label=lbl
-#     )
-#     ax[0].set_xticks(np.arange(len(target_lines)),labels=line_lib["line_name"])
-#     ax[1].set_xticks(np.arange(len(target_lines)),labels=line_lib["line_name"])
-#     ax[0].set_ylabel("$\\delta\\lambda\ (\AA)$")
-#     ax[1].set_ylabel("$\\delta v$ (km/s)")
-#     ax[0].legend()
-
+coaddition.save_spec_data(
+    "outputs/coadd_unbinned",
+    coadd_data_unbinned
+)
