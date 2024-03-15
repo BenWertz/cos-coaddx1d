@@ -89,12 +89,15 @@ line_lib=get_line_lib(target_lines,wavelength_range[arg_Grating.lower()])
 full_line_lib=get_line_lib(full_line_list,wavelength_range[arg_Grating.lower()])
 
 # Initial list of files to be read (some may be discarded if they don't have the right grating)
-filenames_prelim = glob.glob(arg_TgtFolder+"/*x1d.fits")
+filenames_prelim = glob.glob(arg_TgtFolder+"/**/*x1d.fits",recursive=True)
 
 filenames=[]
 spec_table={}
 for file in filenames_prelim:
     spec_data,spec_hdu=spectrum_align.read_x1d_file(file)
+    if spec_data["exptime"]==0:
+        continue
+    
     # Only accept gratings that match the mode
     if matchGrating(spec_data["grating"],arg_Grating):
         # utils.viewX1DFile(file)
@@ -171,14 +174,17 @@ velocity_table=QTable(
 
 TGT_LINE_NAME_LIST=line_lib["line_name"]
 
-os.chdir(sys.path[0])
-if not os.path.exists("outputs"):
-    os.mkdir("outputs")
-    os.mkdir("outputs/figures")
+os.chdir(arg_TgtFolder)
+if not os.path.exists("coadd_x1d"):
+    os.mkdir("coadd_x1d")
+figurePath=f"coadd_x1d/{arg_Grating}/figures"
+if not os.path.exists(figurePath):
+    os.mkdir(f"coadd_x1d/{arg_Grating}")
+    os.mkdir(figurePath)
 
 for line,wlen in zip(full_line_lib["line_name"],full_line_lib["lambda"]):
     diagnostic_plots.diagnostic_plot(
-        "outputs/figures",
+        figurePath,
         spec_table,line,wlen,output_table,
         filenames,
         line_lib,
@@ -200,20 +206,18 @@ coadd_data=coaddition.coadd_spec(
     arg_COADD_MODE,
     3
 )
+
+coaddition.save_spec_data(
+    f"coadd_x1d/{arg_Grating}",
+    coadd_data
+)
+coaddition.save_spec_data(
+    f"coadd_x1d/{arg_Grating}",
+    coadd_data_unbinned
+)
+
 ref_wave,coadded_flux,coadded_error=coadd_data["wave"],coadd_data["flux"],coadd_data["error"]
 ref_wave_unbinned,coadded_flux_unbinned,coadded_error_unbinned=coadd_data_unbinned["wave"],coadd_data_unbinned["flux"],coadd_data_unbinned["error"]
-
-# print(ref_wave[np.isnan(coadded_error)])
-# print("Min:")
-# print([spec_table[f]["header"]["MINWAVE"] for f in filenames])
-# print("Max:")
-# print([spec_table[f]["header"]["MAXWAVE"] for f in filenames])
-
-# print("Wave array min")
-# print([spec_table[f]["wave"].min().value for f in filenames])
-# print("Wave array max")
-# print([spec_table[f]["wave"].max().value for f in filenames])
-
 
 plt.figure(figsize=(12,6))
 lim=diagnostic_plots.plot_clip_lim(coadded_flux,5)
@@ -221,24 +225,18 @@ plt.ylim(lim[0],lim[1])
 
 plt.step(ref_wave,coadded_flux,color="k",lw=1,label=f"Coadded flux ({coadd_data['weighing_method']}, bins={coadd_data['binning']})")
 
-plt.step(ref_wave_unbinned,coadded_flux_unbinned,color="red",lw=0.5,alpha=0.7,label=f"Coadded flux ({coadd_data_unbinned['weighing_method']}, unbinned)")
+plt.step(ref_wave_unbinned,coadded_flux_unbinned,color="lightblue",lw=0.9,alpha=0.7,label=f"Coadded flux ({coadd_data_unbinned['weighing_method']}, unbinned)")
 
-plt.step(ref_wave,coadded_error,color="k",lw=1,alpha=0.5,label="Error (binned)")
+plt.step(ref_wave,coadded_error,color="k",lw=0.5,alpha=0.7,label="Error (binned)")
 
-plt.step(ref_wave_unbinned,coadded_error_unbinned,color="red",lw=1,alpha=0.5,label="Error (unbinned)")
+plt.step(ref_wave_unbinned,coadded_error_unbinned,color="orange",lw=0.5,alpha=0.5,label="Error (unbinned)")
 
 plt.legend(loc="upper left",fontsize="x-small")
 plt.xlabel("$\lambda (\AA)$")
 plt.ylabel("Flux (ergs s^-1 m^-2 sr^-1)")
 plt.minorticks_on()
-plt.savefig("outputs/figures/coadd.png")
-plt.show()
+plt.savefig(f"{figurePath}/coadd_spec.pdf")
 
-coaddition.save_spec_data(
-    "outputs/coadd",
-    coadd_data
-)
-coaddition.save_spec_data(
-    "outputs/coadd_unbinned",
-    coadd_data_unbinned
-)
+plt.draw()
+plt.pause(0.001)
+input("(press enter to close plots)")

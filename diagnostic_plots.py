@@ -48,7 +48,8 @@ def diagnostic_plot(target_dir,spec_table,line,wlen,output_table,filenames,line_
         dL=output_table["mean_dlambda"][i]
         dv=output_table["mean_dlambda"][i]*c.c/wlen
 
-        lbl=f.split("\\")[-1].removesuffix(".fits")
+        dateobs=spec_table[f]["header2"]["TIME-OBS"]
+        lbl=f.split("\\")[-1].removesuffix(".fits")+f" ({dateobs})"
         if spec_table[f]["lines"][j]["bad_line"]:
             try:
                 ax[0].step(
@@ -188,11 +189,11 @@ def diagnostic_plot(target_dir,spec_table,line,wlen,output_table,filenames,line_
     # fig.canvas.manager.full_screen_toggle()
     fig.tight_layout()
     fig.savefig(
-        f"{target_dir}/diagnostic_{line}.pdf"
+        f"{target_dir}/line_{line}.pdf"
     )
-    fig.savefig(
-        f"{target_dir}/diagnostic_{line}.png"
-    )
+    # fig.savefig(
+    #     f"{target_dir}/line_{line}.png"
+    # )
     # fig.canvas.manager.full_screen_toggle()
 
 def plot_clip_lim(data,sigma=3):
