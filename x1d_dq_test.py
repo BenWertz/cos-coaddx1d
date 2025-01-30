@@ -80,27 +80,31 @@ def viewX1D(filename):
 
     # dq=(dq*0)+1*np.mod(np.arange(len(dq)),2)
 
+    ax[1].set_yticks(list(range(16)),labels=dq_labels)
+
     for i in range(16):
         flag_plot=ax[1].plot(wave,i+0.5*((dq>>i) & 1))
-        ax[1].text(
-            wave.min()-10,i,
-            dq_labels[i],
-            fontsize=8,
-            horizontalalignment="right",
-            verticalalignment="center",
-            color=flag_plot[0].get_color()
-        )
+    #     ax[1].text(
+    #         wave.min()-10,i,
+    #         dq_labels[i],
+    #         fontsize=8,
+    #         horizontalalignment="right",
+    #         verticalalignment="center",
+    #         color=flag_plot[0].get_color()
+    #     )
 
     low,high=plot_clip_lim(flux)
-    ax[0].set_ylim(-1e-14,1e-13)
+    ax[0].set_ylim(-.2e-14,0.2e-13)
 
-    ax[0].set_xlim(wave.min()-100,wave.max()+20)
+    ax[0].set_xlim(wave.min(),wave.max()+20)
+
+    fig.subplots_adjust(left=0.3)
 
     fig.suptitle(filename)
 
     return dq
 
-arg_TgtFolder=sys.argv[1]
+arg_TgtFolder=f"targets/{sys.argv[1]}/raw_g130m/x1d"
 filenames = glob.glob(arg_TgtFolder+"/*x1d.fits")
 
 

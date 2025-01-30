@@ -122,7 +122,7 @@ Inputs:
 Output:
 - Stores the data inside the spec_data struct under the line name.
 """
-def process_line(spec_data,line_params,quiet_mode=False):
+def process_line(spec_data,line_params,quiet_mode=False,min_valid_data=0.16):
     name=line_params["line_name"]
     line=line_params["lambda"]
 
@@ -147,11 +147,16 @@ def process_line(spec_data,line_params,quiet_mode=False):
     )
     line_data["has_cont"]=True
 
+    prop_valid=prop_valid_data(line_data["line_vel"],line_data["flux_norm"])
+    if prop_valid>0.8:
+        if not quiet_mode:print(f"\tLine {name}:\n\t\t<data missing (pre-clip)> ({prop_valid})\n")
+        return
+
     flux_clipped,error_clipped=sigma_clip_data(line_data)
 
     prop_valid=prop_valid_data(line_data["line_vel"],flux_clipped)
-    if prop_valid>0.16:
-        if not quiet_mode:print(f"\tLine {name}:\n\t\t<not enough valid datapoints> ({prop_valid})\n")
+    if prop_valid>min_valid_data:
+        if not quiet_mode:print(f"\tLine {name}:\n\t\t<not enough valid datapoints (post-clip)> ({prop_valid})\n")
         return
     line_data["bad_line"]=False
 

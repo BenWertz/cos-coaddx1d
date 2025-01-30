@@ -16,9 +16,11 @@ import coaddition
 import utils
 
 # Command-line arguments
-arg_TgtFolder=sys.argv[1]
+arg_Tgt=sys.argv[1]
 arg_Grating=sys.argv[2]
-arg_COADD_MODE=(sys.argv[3] if len(sys.argv)>=3 else "exptime")
+arg_COADD_MODE=(sys.argv[3] if len(sys.argv)>=4 else "exptime")
+
+targetPath=arg_Tgt
 
 wavelength_range={
     "g130m":[900,1450],
@@ -45,15 +47,14 @@ llist_ism = LineList('ISM')._data.to_pandas()
 
     # "SII 1250","SII 1253"
 target_lines=[
+    "CII 1334",
     "FeII 1144",
-    "PII 1152",
+    # "PII 1152",
     "SII 1253",
     "SII 1250",
-    "AlII 1670",
-    "FeII 1608",
-    # "SiIV 1393",
-    # "SiIV 1402"
-    # "OI 1302",
+    # "AlII 1670",
+    # "FeII 1608",
+    "SiII 1190"
 ]
 
 full_line_list=[
@@ -63,10 +64,10 @@ full_line_list=[
     "SiIV 1393",
     "SiIV 1402",
     "CII 1334",
-    "SII 1190",
-    "SII 1193",
-    "SII 1260",
-    "SIII 1206",
+    "SiII 1190",
+    "SiII 1193",
+    "SiII 1260",
+    "SiIII 1206",
 ]
 
 #TODO: Add actual validation lines for G160M grating
@@ -89,7 +90,8 @@ line_lib=get_line_lib(target_lines,wavelength_range[arg_Grating.lower()])
 full_line_lib=get_line_lib(full_line_list,wavelength_range[arg_Grating.lower()])
 
 # Initial list of files to be read (some may be discarded if they don't have the right grating)
-filenames_prelim = glob.glob(arg_TgtFolder+"/**/*x1d.fits",recursive=True)
+filenames_prelim = glob.glob(f"{targetPath}/**/*x1d.fits",recursive=True)
+print(f"{targetPath}/**/*x1d.fits")
 
 filenames=[]
 spec_table={}
@@ -173,18 +175,18 @@ velocity_table=QTable(
 )
 
 TGT_LINE_NAME_LIST=line_lib["line_name"]
-
-os.chdir(arg_TgtFolder)
-if not os.path.exists("coadd_x1d"):
-    os.mkdir("coadd_x1d")
-figurePath=f"coadd_x1d/{arg_Grating}/figures"
-if not os.path.exists(figurePath):
-    os.mkdir(f"coadd_x1d/{arg_Grating}")
-    os.mkdir(figurePath)
+# os.chdir(arg_TgtFolder)
+# if not os.path.exists(f"{targetPath}/coadd_x1d"):
+#     os.mkdir("{targetPath}/coadd_x1d")
+outputPath=f"{targetPath}/coadd_x1d/{arg_Grating}"
+if not os.path.exists(f"{outputPath}/figures"):
+    os.mkdir(outputPath)
+    os.mkdir(f"{outputPath}/figures")
+    # os.mkdir(figurePath)
 
 for line,wlen in zip(full_line_lib["line_name"],full_line_lib["lambda"]):
     diagnostic_plots.diagnostic_plot(
-        figurePath,
+        f"{outputPath}/figures",
         spec_table,line,wlen,output_table,
         filenames,
         line_lib,
@@ -208,11 +210,11 @@ coadd_data=coaddition.coadd_spec(
 )
 
 coaddition.save_spec_data(
-    f"coadd_x1d/{arg_Grating}",
+    outputPath,
     coadd_data
 )
 coaddition.save_spec_data(
-    f"coadd_x1d/{arg_Grating}",
+    outputPath,
     coadd_data_unbinned
 )
 
@@ -235,7 +237,7 @@ plt.legend(loc="upper left",fontsize="x-small")
 plt.xlabel("$\lambda (\AA)$")
 plt.ylabel("Flux (ergs s^-1 m^-2 sr^-1)")
 plt.minorticks_on()
-plt.savefig(f"{figurePath}/coadd_spec.pdf")
+plt.savefig(f"{outputPath}/figures/coadd_spec.pdf")
 
 plt.draw()
 plt.pause(0.001)
