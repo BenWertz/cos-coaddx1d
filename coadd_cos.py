@@ -16,9 +16,11 @@ import coaddition
 import utils
 
 # Command-line arguments
-arg_TgtFolder=sys.argv[1]
+arg_Tgt=sys.argv[1]
 arg_Grating=sys.argv[2]
-arg_COADD_MODE=(sys.argv[3] if len(sys.argv)>=3 else "exptime")
+arg_COADD_MODE=(sys.argv[3] if len(sys.argv)>=4 else "exptime")
+
+targetPath=arg_Tgt
 
 wavelength_range={
     "g130m":[900,1450],
@@ -45,15 +47,14 @@ llist_ism = LineList('ISM')._data.to_pandas()
 
     # "SII 1250","SII 1253"
 target_lines=[
+    "CII 1334",
     "FeII 1144",
-    "PII 1152",
+    # "PII 1152",
     "SII 1253",
     "SII 1250",
-    "AlII 1670",
-    "FeII 1608",
-    # "SiIV 1393",
-    # "SiIV 1402"
-    # "OI 1302",
+    # "AlII 1670",
+    # "FeII 1608",
+    "SiII 1190"
 ]
 
 full_line_list=[
@@ -63,10 +64,10 @@ full_line_list=[
     "SiIV 1393",
     "SiIV 1402",
     "CII 1334",
-    "SII 1190",
-    "SII 1193",
-    "SII 1260",
-    "SIII 1206",
+    "SiII 1190",
+    "SiII 1193",
+    "SiII 1260",
+    "SiIII 1206",
 ]
 
 #TODO: Add actual validation lines for G160M grating
@@ -89,12 +90,16 @@ line_lib=get_line_lib(target_lines,wavelength_range[arg_Grating.lower()])
 full_line_lib=get_line_lib(full_line_list,wavelength_range[arg_Grating.lower()])
 
 # Initial list of files to be read (some may be discarded if they don't have the right grating)
-filenames_prelim = glob.glob(arg_TgtFolder+"/*x1d.fits")
+filenames_prelim = glob.glob(f"{targetPath}/**/*x1d.fits",recursive=True)
+print(f"{targetPath}/**/*x1d.fits")
 
 filenames=[]
 spec_table={}
 for file in filenames_prelim:
     spec_data,spec_hdu=spectrum_align.read_x1d_file(file)
+    if spec_data["exptime"]==0:
+        continue
+    
     # Only accept gratings that match the mode
     if matchGrating(spec_data["grating"],arg_Grating):
         # utils.viewX1DFile(file)
@@ -170,15 +175,18 @@ velocity_table=QTable(
 )
 
 TGT_LINE_NAME_LIST=line_lib["line_name"]
-
-os.chdir(sys.path[0])
-if not os.path.exists("outputs"):
-    os.mkdir("outputs")
-    os.mkdir("outputs/figures")
+# os.chdir(arg_TgtFolder)
+# if not os.path.exists(f"{targetPath}/coadd_x1d"):
+#     os.mkdir("{targetPath}/coadd_x1d")
+outputPath=f"{targetPath}/coadd_x1d/{arg_Grating}"
+if not os.path.exists(f"{outputPath}/figures"):
+    os.mkdir(outputPath)
+    os.mkdir(f"{outputPath}/figures")
+    # os.mkdir(figurePath)
 
 for line,wlen in zip(full_line_lib["line_name"],full_line_lib["lambda"]):
     diagnostic_plots.diagnostic_plot(
-        "outputs/figures",
+        f"{outputPath}/figures",
         spec_table,line,wlen,output_table,
         filenames,
         line_lib,
@@ -200,50 +208,37 @@ coadd_data=coaddition.coadd_spec(
     arg_COADD_MODE,
     3
 )
+
+coaddition.save_spec_data(
+    outputPath,
+    coadd_data
+)
+coaddition.save_spec_data(
+    outputPath,
+    coadd_data_unbinned
+)
+
 ref_wave,coadded_flux,coadded_error=coadd_data["wave"],coadd_data["flux"],coadd_data["error"]
-
-# print(ref_wave[np.isnan(coadded_error)])
-# print("Min:")
-# print([spec_table[f]["header"]["MINWAVE"] for f in filenames])
-# print("Max:")
-# print([spec_table[f]["header"]["MAXWAVE"] for f in filenames])
-
-# print("Wave array min")
-# print([spec_table[f]["wave"].min().value for f in filenames])
-# print("Wave array max")
-# print([spec_table[f]["wave"].max().value for f in filenames])
-
+ref_wave_unbinned,coadded_flux_unbinned,coadded_error_unbinned=coadd_data_unbinned["wave"],coadd_data_unbinned["flux"],coadd_data_unbinned["error"]
 
 plt.figure(figsize=(12,6))
 lim=diagnostic_plots.plot_clip_lim(coadded_flux,5)
 plt.ylim(lim[0],lim[1])
 
-# plt.step(coadd_data_unbinned["wave"],coadd_data_unbinned["flux"],color="b",lw=2,label=f"unbinned")
+plt.step(ref_wave,coadded_flux,color="k",lw=1,label=f"Coadded flux ({coadd_data['weighing_method']}, bins={coadd_data['binning']})")
 
-plt.step(ref_wave,coadded_flux,color="k",lw=2,label=f"Coadded spectrum ({coadd_data['weighing_method']})")
+plt.step(ref_wave_unbinned,coadded_flux_unbinned,color="lightblue",lw=0.9,alpha=0.7,label=f"Coadded flux ({coadd_data_unbinned['weighing_method']}, unbinned)")
 
-plt.step(ref_wave,coadded_error,color="blue",lw=1,alpha=0.5,label="Error")
+plt.step(ref_wave,coadded_error,color="k",lw=0.5,alpha=0.7,label="Error (binned)")
 
-ref_coadd_data=fits.open("PG1011-040_G130M+G160M_coadd_x1d_bin3_m1.fits")[1]
-
-# coadd_data=spectrum_align.read_x1d_file("PG1011-040_G130M+G160M_coadd_x1d_bin3_m1.fits",wave_label="WAVE")
-plt.step(ref_coadd_data.data["WAVE"][0,:],ref_coadd_data.data["FLUX"][0,:],color="orange",lw=1.5,label="Actual coadded spectrum")
-
-plt.step(ref_coadd_data.data["WAVE"][0,:],ref_coadd_data.data["ERROR"][0,:],color="red",lw=1,alpha=0.5,label="(actual) Error")
-
+plt.step(ref_wave_unbinned,coadded_error_unbinned,color="orange",lw=0.5,alpha=0.5,label="Error (unbinned)")
 
 plt.legend(loc="upper left",fontsize="x-small")
 plt.xlabel("$\lambda (\AA)$")
 plt.ylabel("Flux (ergs s^-1 m^-2 sr^-1)")
 plt.minorticks_on()
-plt.savefig("outputs/figures/coadded.png")
-plt.show()
+plt.savefig(f"{outputPath}/figures/coadd_spec.pdf")
 
-coaddition.save_spec_data(
-    "outputs/coadd",
-    coadd_data
-)
-coaddition.save_spec_data(
-    "outputs/coadd_unbinned",
-    coadd_data_unbinned
-)
+plt.draw()
+plt.pause(0.001)
+input("(press enter to close plots)")

@@ -13,6 +13,7 @@ def genEmptySpecX1D():
         "wave":np.array([np.nan]),
         "flux":np.array([np.nan]),
         "error":np.array([np.nan]),
+        "dq":np.array([np.nan]),
         "exptime":0,
         "lines":[],
 
@@ -59,6 +60,13 @@ def read_x1d_file(filename,wave_label="WAVELENGTH",flux_label="FLUX",error_label
     data=fits.open(filename)
     spec_hdu=data[1]
 
+    # print(("\n".join(sorted(data[0].header.keys()))).lower())
+    # input()
+
+    if spec_hdu.header["EXPTIME"]==0:
+        print(f"Warning reading {filename}: EXPTIME=0, discarding")
+        return {"exptime":0},spec_hdu
+
     # Cut off any parts of the low end of the spectrum that overlap the high end
     low_spectrum_mask=(spec_hdu.data[wave_label][1,:] < np.min(spec_hdu.data[wave_label][0,:]))
 
@@ -82,23 +90,28 @@ def read_x1d_file(filename,wave_label="WAVELENGTH",flux_label="FLUX",error_label
         spec_hdu.data[error_label][0,:]
     ])
 
+    dq=np.concatenate([
+        spec_hdu.data["dq"][1,:],#[low_spectrum_mask],
+        spec_hdu.data["dq"][0,:]
+    ])
+
     # Generate empty spectrum
     spec_data=genEmptySpecX1D()
     spec_data["net"]=net
     spec_data["wave"]=wave
     spec_data["flux"]=flux
     spec_data["error"]=error
+    spec_data["dq"]=dq
 
     spec_data["exptime"]=spec_hdu.header["EXPTIME"]
     spec_data["header"]=data[0].header
+    spec_data["header2"]=data[1].header
     spec_data["grating"]=data[0].header["OPT_ELEM"]
 
     spec_data["wavelim"]={
         "min":data[0].header["MINWAVE"]*u.AA,
         "max":data[0].header["MAXWAVE"]*u.AA
     }
-
-    print(list(spec_data["header"].keys()))
 
     return spec_data,spec_hdu
 
@@ -109,7 +122,7 @@ Inputs:
 Output:
 - Stores the data inside the spec_data struct under the line name.
 """
-def process_line(spec_data,line_params,quiet_mode=False):
+def process_line(spec_data,line_params,quiet_mode=False,min_valid_data=0.16):
     name=line_params["line_name"]
     line=line_params["lambda"]
 
@@ -134,11 +147,16 @@ def process_line(spec_data,line_params,quiet_mode=False):
     )
     line_data["has_cont"]=True
 
+    prop_valid=prop_valid_data(line_data["line_vel"],line_data["flux_norm"])
+    if prop_valid>0.8:
+        if not quiet_mode:print(f"\tLine {name}:\n\t\t<data missing (pre-clip)> ({prop_valid})\n")
+        return
+
     flux_clipped,error_clipped=sigma_clip_data(line_data)
 
     prop_valid=prop_valid_data(line_data["line_vel"],flux_clipped)
-    if prop_valid>0.16:
-        if not quiet_mode:print(f"\tLine {name}:\n\t\t<not enough valid datapoints> ({prop_valid})\n")
+    if prop_valid>min_valid_data:
+        if not quiet_mode:print(f"\tLine {name}:\n\t\t<not enough valid datapoints (post-clip)> ({prop_valid})\n")
         return
     line_data["bad_line"]=False
 
